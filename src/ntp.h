@@ -56,6 +56,12 @@ class NTP {
       return pow(double(2), double(packet.precision));
     }
 
+    const char* getIP() const {
+      static char id[30];
+      snprintf(id, 30, "%d.%d.%d.%d", packet.refId[0], packet.refId[1], packet.refId[2], packet.refId[3]);
+      return id;
+    }
+
     uint64_t getT0() const {
       return MS1900(packet.origTm_s, packet.origTm_f);
     }
@@ -115,9 +121,9 @@ class NTP {
       uint8_t poll;            // Eight bits. Maximum interval between successive messages. (2^n)
       int8_t  precision;       // Eight bits. Precision of the local clock. -10 --> 2^(-10) ~ 0.97 msec
 
-      int32_t rootDelay;      // 32 bits. Total round trip delay time.
-      int32_t rootDispersion; // 32 bits. Max error aloud from primary clock source.
-      char    refId[4];       // 32 bits. Reference clock identifier as char[4]
+      int32_t rootDelay;       // 32 bits. Total round trip delay time.
+      int32_t rootDispersion;  // 32 bits. Max error aloud from primary clock source.
+      char    refId[4];        // 32 bits. Reference clock identifier as char[4]
 
       uint8_t refTm_s[4];      // 32 bits. Reference time-stamp seconds.
       uint8_t refTm_f[4];      // 32 bits. Reference time-stamp fraction of a second.
