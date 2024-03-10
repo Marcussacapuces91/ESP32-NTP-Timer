@@ -16,24 +16,16 @@
 
 #pragma once
 
+#define TOUCH_CS 0xFF
+#include <TFT_eSPI.h>
+// #include <SPI.h>
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <ESP32Time.h>
 #include "ntp.h"
 
-// #define TOUCH_CS 0xFF
-// #include <TFT_eSPI.h>
-// #include <SPI.h>
-
-const char serverName[] = "fr.pool.ntp.org"; // Adresse IP du serveur UDP
-const int serverPort = 123; // Port du serveur UDP
-
-#define MS1900(A, B) ( ((((A[0] * 256UL + A[1]) * 256UL + A[2]) * 256UL + A[3]) * 1000000ULL) + (((((B[0] * 256UL + B[1]) * 256UL + B[2]) * 256UL + B[3]) * 1000000ULL) >> 32) )
-#define SET_REGISTER(r, t) { (r)[0] = (t) >> 24; (r)[1] = (t >> 16) & 0x0FF; (r)[2] = (t >> 8) & 0x0FF; (r)[3] = t & 0x0FF; }
 #define POOL_NTP "fr.pool.ntp.org"
 #define PORT_NTP 123
-
-// #include <string>
 
 /**
  * Classe Application ; expose les méthodes setup et loop qui sont utilisées dans les deux fonctions homonymes du programme principal.
@@ -41,22 +33,68 @@ const int serverPort = 123; // Port du serveur UDP
  **/
 class Application {
   public:
-    Application() :
-      udp()
-//      tft(TFT_eSPI()),
-    {}
+    Application() : tft(TFT_eSPI()), udp() 
+    {
+      tft.init();
+      tft.setRotation(3);
+    }
 
     void setup() {
+      tft.fillScreen(TFT_BLACK);
+      tft.setTextColor(TFT_YELLOW);
+      tft.setFreeFont(&FreeSerifBold12pt7b);
+      tft.print("\nESP32 NTP Timer v0");
+      tft.setTextFont(2);
+      tft.print("\nCopyright © ");  tft.print(__DATE__ + 7); tft.println(" M. SIBERT");
+
+      tft.setTextColor(TFT_WHITE);
+      char text[] = "Se connecte au WiFi puis a l'aide de requetes NTP regulieres maintient sa base temps a moins d'une milliseconde de precision.";
+      for (auto i = 0; i < sizeof(text); ++i) {
+        tft.print(text[i]);
+        delay(150);
+      }
+
+      tft.setCursor(0,0);
+      tft.fillScreen(TFT_BLACK);
+      tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+      tft.setTextFont(4);
+      tft.println("Setup WiFi");
+      tft.setTextFont(2);
+
       if (!initWiFi()) {
-        Serial.println("Error setting up WiFi");
+        tft.setTextColor(TFT_RED);
+        tft.println("Error setting up WiFi");
         exit(-1);
       }
 
+      setFirstTime();
 
+      time.offset = 3600;
+
+      tft.fillScreen(TFT_BLACK);
+    }
+
+    void loop() {
+      static auto last = 0;
+
+      if (time.getEpoch() != last) {
+        last = time.getEpoch();
+        tft.setCursor(0,0);
+        tft.setTextColor(TFT_GREEN, TFT_BLACK);
+        
+        tft.setTextSize(1.5);
+        tft.setTextFont(7);
+        tft.println(time.getTime("%H:%M:%S"));
+
+      }
+    }
+
+  protected:
+    void setFirstTime() {
       int64_t offset = 1000000;
       unsigned polling = 0;
       while (abs(offset) > 500) {
-        delay(polling * 1000);
+        delay((polling > 30 ? 30 : polling) * 1000);
         NTP ntp = NTP::makeNTP();
         sendNTP(ntp, POOL_NTP, PORT_NTP);
 
@@ -68,15 +106,14 @@ class Application {
         time.setTime(time.getEpoch() + offset / 1000000, (time.getMicros() + offset) % 1000000);
         polling = ntp.getPolling();
 
-
-
         Serial.println(ntp.getHeader());
         Serial.print("Max polling [s]: ");
         Serial.println(ntp.getPolling());
-
         char prec[50];
         snprintf(prec, 50, "Src prec. [s]: %e", ntp.getPrecision());
         Serial.println(prec);
+        Serial.print("IP: ");
+        Serial.println(ntp.getIP());
 
         Serial.print("T0: ");
         Serial.println(ntp.getT0());
@@ -91,100 +128,7 @@ class Application {
 
         Serial.println(time.getDateTime());
       }
-
-
-      /*
-      uint64_t t1, tp1, tp2, t2 = 0;
-
-      getNTP("fr.pool.ntp.org", t1, tp1, tp2, t2);
-      time.setTime((tp1+tp2) / 2000000 - YEAR1970, ((tp1 + tp2) / 2) % 1000000);
-*/
-//      tft.init();
-//      tft.setRotation(3);
     }
-
-    void loop() {
-      // afficher(time.getEpoch());
-
-      // Serial.println(millis() % 30000);
-
-      static float moyenne = 0;
-
-      if (!(millis() % 500)) {
-//        Serial.println(time.getDateTime());
-
-        uint64_t t1, tp1, tp2, t2 = 0;
-//        getNTP("fr.pool.ntp.org", t1, tp1, tp2, t2);
-
-/*
-        Serial.print("T1:  ");
-        Serial.println(t1);
-        Serial.print("T'1: ");
-        Serial.println(tp1);
-        Serial.print("T'2: ");
-        Serial.println(tp2);
-        Serial.print("T2:  ");
-        Serial.println(t2);
-*/
-        if (!tp1 || !tp2 || !t1 || !t2) {
-//          Serial.println("Error in mesure!");
-          return;
-        }
-
-        const unsigned long run = t2 - t1;
-//        Serial.print("Run (ms): ");
-//        Serial.println(run / 1000.0);
-        Serial.print(run);
-        Serial.print(", ");
-
-//        Serial.print("Diff: ");
-        const int64_t diff1 = tp1 - t1;
-//        Serial.print(diff1);
-        const int64_t diff2 = t2 - tp2;
-//        Serial.print(" - ");
-//        Serial.print(diff2);
-        const int64_t diff = (diff1 - diff2) / 2;
-//        Serial.print(" = ");
-//        Serial.println(diff);
-        Serial.print(diff);
-        Serial.print(", ");
-
-        const auto n = 50;
-        moyenne = (moyenne * (n-1) + diff) / n;
-//        Serial.print("Moyenne: ");
-//        Serial.println(moyenne);
-        Serial.print(moyenne);
-        Serial.println("");
-
-        if (abs(diff) < 500) {
-//          Serial.println("Low diff.");
-          return;
-        }
-
-        const auto epoch = time.getEpoch();
-        const auto ms = time.getMicros();
-        time.setTime( epoch + (int(round(moyenne/10)) / 1000000), (ms + int(trunc(moyenne/10))) % 1000000);
-//        Serial.print("Local before: ");
-//        Serial.println((epoch + YEAR1970) * 1000000 + ms);
-//        Serial.print("After: ");
-//        Serial.println((time.getEpoch() + YEAR1970) * 1000000 + time.getMicros());
-      }
-    }
-
-
-/*
-      tft.fillScreen(TFT_BLACK);
-      tft.setTextColor(TFT_WHITE);
-      tft.setTextFont(2);
-      tft.setCursor(0, 0);
-      tft.print("Header Horloge "); tft.println(__DATE__);
-      tft.println();
-      tft.setTextFont(7);
-      const auto m = millis();
-      tft.printf("%02d:%02d:%02d", (hours + m / 1000 / 3600) % 24, (minutes + m / 1000 / 60) % 60, (seconds + m / 1000) % 60);
-*/
-
-  protected:
 
     void sendNTP(NTP& ntp, const char host[], const unsigned port) {
       udp.begin(1024);
@@ -305,61 +249,46 @@ class Application {
  * @return True if ok or else False.
  **/
     bool initWiFi() {
-      WiFi.begin(WIFI_SSID, WIFI_PASS)  ;
-      while (WiFi.status() != WL_CONNECTED) {
+      const auto xPos = tft.getCursorX();
+      const auto yPos = tft.getCursorY();
+      WiFi.mode(WIFI_STA);
+      WiFi.begin(WIFI_SSID, WIFI_PASS);
+      while (true) {
         delay(500);
-        Serial.print("Connecting to Wifi (");
+        tft.setCursor(xPos, yPos);
+        tft.print("SSID: "); tft.println(WIFI_SSID);
+
+        tft.print("Stat: ");
         switch (WiFi.status()) {
           case WL_NO_SHIELD:
-            Serial.print("hardware missing");
-            break;
+            tft.println("hardware missing!   ");
+            return false;
           case WL_IDLE_STATUS:
-            Serial.print("idle");
+            tft.println("idle...             ");
             break;
           case WL_NO_SSID_AVAIL:
-            Serial.print("SSID unavailable");
-            break;
-          case WL_SCAN_COMPLETED:
-            Serial.print("Scan completed");
+            tft.println("SSID unavailable!   ");
             break;
           case WL_CONNECTED:
-            Serial.print("connected");
-            break;
+            tft.println("connected.          ");
+            tft.print("IP: "); tft.println(WiFi.localIP());
+            tft.print("RSSI [dB]: "); tft.println(WiFi.RSSI());
+            return true;
           case WL_CONNECT_FAILED:
-            Serial.print("connect failed");
+            tft.println("connect failed!     ");
             break;
           case WL_CONNECTION_LOST:
-            Serial.print("connection lost");
+            tft.println("connection lost...  ");
             break;
           case WL_DISCONNECTED:
-            Serial.print("disconnected");
+            tft.println("disconnected...     ");
             break;
         }
-        Serial.println(")...");
       }
-      Serial.println("Wifi connected.");
-      return true;
     }
-
-/*
-    void printPacket(const ntp_packet& packet) const {
-      const auto ref = MS1900(packet.refTm_s, packet.refTm_f);
-      Serial.print("Ref: ");
-      Serial.println(ref / 1000.0);
-      const auto orig = MS1900(packet.origTm_s, packet.origTm_f);
-      Serial.print("Orig: ");
-      Serial.println(orig / 1000.0);
-      const auto rx = MS1900(packet.rxTm_s, packet.rxTm_f);
-      Serial.print("Rx: ");
-      Serial.println(rx / 1000.0);
-      const auto tx = MS1900(packet.txTm_s, packet.txTm_f);
-      Serial.print("Tx: ");
-      Serial.println(tx / 1000.0);
-    }
-*/
 
   private:
-    // TFT_eSPI tft;
+    TFT_eSPI tft;
     ESP32Time time;
     WiFiUDP udp;
 
