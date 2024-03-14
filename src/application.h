@@ -23,9 +23,14 @@
 #include <WiFiUdp.h>
 #include <ESP32Time.h>
 #include "ntp.h"
+#include "timezone.h"
 
 #define POOL_NTP "fr.pool.ntp.org"
 #define PORT_NTP 123
+
+TimeChangeRule frSTD = {"CET", Last, Sun, Mar, 2, +60};   // UTC + 1 hours
+TimeChangeRule frDST = {"CEST", Last, Sun, Oct, 3, +120};  // UTC + 2 hours
+Timezone frParis(frSTD, frDST);
 
 /**
  * Classe Application ; expose les méthodes setup et loop qui sont utilisées dans les deux fonctions homonymes du programme principal.
@@ -33,33 +38,14 @@
  **/
 class Application {
   public:
-    Application() : tft(TFT_eSPI()), udp() 
+    Application() : tft(TFT_eSPI()), time(0), udp(), timezone(frParis)
     {
       tft.init();
       tft.setRotation(3);
     }
 
     void setup() {
-      tft.fillScreen(TFT_BLACK);
-      tft.setTextColor(TFT_YELLOW);
-      tft.setFreeFont(&FreeSerifBold12pt7b);
-      tft.print("\nESP32 NTP Timer v0");
-      tft.setTextFont(2);
-      tft.print("\nCopyright © ");  tft.print(__DATE__ + 7); tft.println(" M. SIBERT");
-
-      tft.setTextColor(TFT_WHITE);
-      char text[] = "Se connecte au WiFi puis a l'aide de requetes NTP regulieres maintient sa base temps a moins d'une milliseconde de precision.";
-      for (auto i = 0; i < sizeof(text); ++i) {
-        tft.print(text[i]);
-        delay(150);
-      }
-
-      tft.setCursor(0,0);
-      tft.fillScreen(TFT_BLACK);
-      tft.setTextColor(TFT_YELLOW, TFT_BLACK);
-      tft.setTextFont(4);
-      tft.println("Setup WiFi");
-      tft.setTextFont(2);
+      splash_screen();
 
       if (!initWiFi()) {
         tft.setTextColor(TFT_RED);
@@ -68,28 +54,51 @@ class Application {
       }
 
       setFirstTime();
-
-      time.offset = 3600;
-
-      tft.fillScreen(TFT_BLACK);
+      
+//      WiFi.disconnect(true);
+//      WiFi.mode(WIFI_OFF);
     }
 
     void loop() {
       static auto last = 0;
 
-      if (time.getEpoch() != last) {
-        last = time.getEpoch();
-        tft.setCursor(0,0);
-        tft.setTextColor(TFT_GREEN, TFT_BLACK);
+      const auto epoch = time.getEpoch();
+      if (epoch != last) {
+        last = epoch;
+
+        struct tm tmUTC = { time.getSecond(), time.getMinute(), time.getHour(true), time.getDay(), time.getMonth(), time.getYear() - 1900 };
+        const auto utc = mktime(&tmUTC);
+
+
+        char str[100];
         
-        tft.setTextSize(1.5);
-        tft.setTextFont(7);
-        tft.println(time.getTime("%H:%M:%S"));
+        tft.fillScreen(TFT_BLACK);
+        tft.setTextColor(TFT_GREEN, TFT_BLACK);
+        tft.setTextDatum(MC_DATUM);
+        if (strftime(str, sizeof(str), "%X", &tmUTC))
+          tft.drawString(str, tft.width()/2, tft.height()/2, 7);
+        tft.setTextDatum(BL_DATUM);
+        if (strftime(str, sizeof(str), "%a %b %e %Y - S%V - %Z", &tmUTC))
+        tft.drawString(str, 0, tft.height(), 2);
 
       }
     }
 
   protected:
+
+    void splash_screen() {  
+      tft.fillScreen(TFT_BLACK);
+      tft.setTextColor(TFT_YELLOW);
+      tft.setTextFont(4);
+      tft.println("ESP32 NTP Timer v0");
+      tft.setTextFont(2);
+      tft.print("Copyright (c) ");  tft.print(__DATE__ + 7); tft.println(" M. SIBERT");
+
+      tft.setTextColor(TFT_WHITE);
+      tft.print("Se connecte au WiFi puis a l'aide de requetes NTP regulieres maintient sa base temps a moins d'une milliseconde de precision.");
+      delay(2000);
+    }
+
     void setFirstTime() {
       int64_t offset = 1000000;
       unsigned polling = 0;
@@ -99,7 +108,7 @@ class Application {
         sendNTP(ntp, POOL_NTP, PORT_NTP);
 
         const bool received = waitForNTP(ntp, PORT_NTP, 100);
-        if (!received || !ntp.getT1() || !ntp.getT2()) continue;
+        if (!received || !ntp.getT1() || !ntp.getT2() || ntp.getVersion() != 3 || ntp.getMode() != 4) continue;
 
         offset = ntp.getOffset();
 
@@ -108,7 +117,7 @@ class Application {
 
         Serial.println(ntp.getHeader());
         Serial.print("Max polling [s]: ");
-        Serial.println(ntp.getPolling());
+        Serial.println(polling);
         char prec[50];
         snprintf(prec, 50, "Src prec. [s]: %e", ntp.getPrecision());
         Serial.println(prec);
@@ -249,6 +258,13 @@ class Application {
  * @return True if ok or else False.
  **/
     bool initWiFi() {
+      tft.setCursor(0,0);
+      tft.fillScreen(TFT_BLACK);
+      tft.setTextColor(TFT_YELLOW, TFT_BLACK);
+      tft.setTextFont(4);
+      tft.println("Setup WiFi");
+      tft.setTextFont(2);
+
       const auto xPos = tft.getCursorX();
       const auto yPos = tft.getCursorY();
       WiFi.mode(WIFI_STA);
@@ -283,6 +299,9 @@ class Application {
           case WL_DISCONNECTED:
             tft.println("disconnected...     ");
             break;
+          default:
+            break;
+
         }
       }
     }
@@ -291,7 +310,7 @@ class Application {
     TFT_eSPI tft;
     ESP32Time time;
     WiFiUDP udp;
-
+    Timezone timezone;
 };
 
 
