@@ -48,6 +48,14 @@ class NTP {
       return buffer;
     }
 
+    byte getMode() const {
+      return (packet.li_vn_mode) % 8;
+    }
+
+    byte getVersion() const {
+      return (packet.li_vn_mode >> 3) % 8;
+    }
+
     unsigned getPolling() const {
       return 1UL << packet.poll;
     }
