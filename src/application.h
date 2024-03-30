@@ -25,12 +25,17 @@
 #include "ntp.h"
 #include "timezone.h"
 
+#include "ftntp_client.h"
+// #include "DSEG14_Classic_Bold_Italic_25.h"
+
+
 #define POOL_NTP "fr.pool.ntp.org"
 #define PORT_NTP 123
 
-TimeChangeRule frSTD = {"CET", Last, Sun, Mar, 2, +60};   // UTC + 1 hours
-TimeChangeRule frDST = {"CEST", Last, Sun, Oct, 3, +120};  // UTC + 2 hours
+TimeChangeRule frSTD = {"CET", Last, Sun, Mar, 2, +120};   // UTC +2 hours
+TimeChangeRule frDST = {"CEST", Last, Sun, Oct, 3, +60};  // UTC +1 hours
 Timezone frParis(frSTD, frDST);
+
 
 /**
  * Classe Application ; expose les méthodes setup et loop qui sont utilisées dans les deux fonctions homonymes du programme principal.
@@ -64,23 +69,9 @@ class Application {
 
       const auto epoch = time.getEpoch();
       if (epoch != last) {
+        if (!last) tft.fillScreen(TFT_BLACK); // First loop
+        displayTime(epoch);
         last = epoch;
-
-        struct tm tmUTC = { time.getSecond(), time.getMinute(), time.getHour(true), time.getDay(), time.getMonth(), time.getYear() - 1900 };
-        const auto utc = mktime(&tmUTC);
-
-
-        char str[100];
-        
-        tft.fillScreen(TFT_BLACK);
-        tft.setTextColor(TFT_GREEN, TFT_BLACK);
-        tft.setTextDatum(MC_DATUM);
-        if (strftime(str, sizeof(str), "%X", &tmUTC))
-          tft.drawString(str, tft.width()/2, tft.height()/2, 7);
-        tft.setTextDatum(BL_DATUM);
-        if (strftime(str, sizeof(str), "%a %b %e %Y - S%V - %Z", &tmUTC))
-        tft.drawString(str, 0, tft.height(), 2);
-
       }
     }
 
@@ -88,8 +79,16 @@ class Application {
 
     void splash_screen() {  
       tft.fillScreen(TFT_BLACK);
+      tft.setSwapBytes(true);
+      tft.pushImage(0,0,135,135,ftntp_client);
+      delay(1000);
+
+   //   tft.setFreeFont(&DSEG14_Classic_Bold_Italic_25);
+
+
+
       tft.setTextColor(TFT_YELLOW);
-      tft.setTextFont(4);
+//      tft.setTextFont(4);
       tft.println("ESP32 NTP Timer v0");
       tft.setTextFont(2);
       tft.print("Copyright (c) ");  tft.print(__DATE__ + 7); tft.println(" M. SIBERT");
@@ -97,6 +96,41 @@ class Application {
       tft.setTextColor(TFT_WHITE);
       tft.print("Se connecte au WiFi puis a l'aide de requetes NTP regulieres maintient sa base temps a moins d'une milliseconde de precision.");
       delay(2000);
+    }
+
+    void displayTime(const unsigned long& epoch) {
+      static const char *const days[] = { "Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam" };
+      static const char *const months[] = { "Janv.", "Fevr.", "Mars", "Avril", "Mai", "Juin", "Juil.", "Aout", "Sept.", "Octo.", "Nove.", "Dece." };
+      struct tm tmUTC, tmLocal;
+
+      gmtime_r( (const time_t*)(&epoch), &tmUTC );
+      const auto epochLocal = timezone.localtime(epoch);
+      gmtime_r( (const time_t*)(&epochLocal), &tmLocal );
+
+      char str[100];
+        
+// Heure locale
+      tft.setTextDatum(TL_DATUM);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      if (strftime(str, sizeof(str), "%R", &tmLocal)) {
+        const auto x = 25;
+        const auto y = 40;
+        const auto dx = tft.drawString(str, x, y, 6);
+        if (strftime(str, sizeof(str), ":%S", &tmLocal))
+          tft.drawString(str, x + 1 + dx, y, 4);
+      }
+
+// Date locale
+      tft.setTextDatum(BC_DATUM);
+      tft.setTextColor(TFT_WHITE, TFT_BLACK);
+      if (snprintf(str, sizeof(str), "%s. %02d %s %d", days[tmLocal.tm_wday], tmLocal.tm_mday, months[tmLocal.tm_mon], tmLocal.tm_year + 1900) > 0)
+        tft.drawString(str, tft.width()/2, tft.height() - 18, 4);
+ 
+ // Date et heure UTC.
+      tft.setTextDatum(BC_DATUM);
+      tft.setTextColor(TFT_BLUE, TFT_BLACK);
+      if (strftime(str, sizeof(str), "%c UTC", &tmUTC))
+        tft.drawString(str, tft.width()/2, tft.height(), 2);
     }
 
     void setFirstTime() {
