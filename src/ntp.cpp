@@ -62,6 +62,11 @@ double NTP::getPrecision() const {
   return pow(double(2), double(packet.precision));
 }
 
+const char* NTP::getId() const {
+  static char id[30];
+  return packet.refId;
+}
+
 const char* NTP::getIP() const {
   static char id[30];
   snprintf(id, 30, "%d.%d.%d.%d", packet.refId[0], packet.refId[1], packet.refId[2], packet.refId[3]);

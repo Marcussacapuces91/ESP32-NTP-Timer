@@ -32,6 +32,7 @@ class NTP {
     byte getVersion() const;
     unsigned getPolling() const;
     double getPrecision() const;
+    const char* getId() const;
     const char* getIP() const;
     uint64_t getT0() const;
     uint64_t getT1() const;

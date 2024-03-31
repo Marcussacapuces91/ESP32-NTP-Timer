@@ -19,9 +19,9 @@
 #include <cstdint>
 #include <ctime>
 
-enum week_t {Last, First, Second, Third, Fourth}; 
-enum dow_t {Sun=0, Mon, Tue, Wed, Thu, Fri, Sat};
-enum month_t {Jan=0, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec};
+enum week_t { Last, First, Second, Third, Fourth };
+enum dow_t { Sun=0, Mon, Tue, Wed, Thu, Fri, Sat };
+enum month_t { Jan=0, Feb, Mar, Apr, May, Jun, Jul, Aug, Sep, Oct, Nov, Dec };
 
 struct TimeChangeRule {
     char abbrev[6];    // five chars max
@@ -38,6 +38,12 @@ class Timezone {
     time_t localtime(const time_t& utc) const;
 
   protected:
+/**
+ * Retourne l'heure du changement horaire.
+ * @param rule Règle de changement d'heure.
+ * @param year Année courante depuis 1900.
+ * @return Un entier représentant le temps unix (@see mktime).
+ */
     static time_t getChange(const TimeChangeRule rule, const int year);
 
   private:

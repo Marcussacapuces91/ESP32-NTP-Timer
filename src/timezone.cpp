@@ -15,7 +15,7 @@
 //
 
 #include "timezone.h"
-// #include <Arduino.h>
+#include <Arduino.h>
 
 Timezone::Timezone(const TimeChangeRule& aStd, const TimeChangeRule& aDst) :
   std(aStd),
@@ -43,21 +43,20 @@ time_t Timezone::localtime(const time_t& utc) const {
 }
 
 time_t Timezone::getChange(const TimeChangeRule rule, const int year) {
-  struct tm tm;
-  tm.tm_hour = rule.hour;
-  tm.tm_year = year;
-
-//  Serial.println(asctime(&tm));
+  struct tm tm = { 0, 0, rule.hour, 1, 0, year, 0, 0, 0 }; // 1st jan 1900.
+//  Serial.println(rule.abbrev);
 
   if (rule.week == Last) {
-    tm.tm_mday = 0;
-    tm.tm_mon = rule.month + 1;
-    
+    tm.tm_mday = 0;             // Last day (0)
+    tm.tm_mon = rule.month + 1; // of the month.
     auto epoch = mktime(&tm); // Normalize to last day of the month.
+//    Serial.print(asctime(&tm));
+
     while (tm.tm_wday != rule.dow) {
       --tm.tm_mday;
       epoch = mktime(&tm);
     }
+//    Serial.println(asctime(&tm));
     return epoch;
   }
 

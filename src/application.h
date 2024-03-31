@@ -36,19 +36,32 @@ TimeChangeRule frSTD = {"CET", Last, Sun, Mar, 2, +120};   // UTC +2 hours
 TimeChangeRule frDST = {"CEST", Last, Sun, Oct, 3, +60};  // UTC +1 hours
 Timezone frParis(frSTD, frDST);
 
+/**
+ * NTP Server description.
+ */
+struct NTPServer {
+  char          refId[4];
+  unsigned      poll;
+  unsigned long lastPoll;
+};
 
 /**
  * Classe Application ; expose les méthodes setup et loop qui sont utilisées dans les deux fonctions homonymes du programme principal.
- *
- **/
+ */
 class Application {
   public:
-    Application() : tft(TFT_eSPI()), time(0), udp(), timezone(frParis)
+/**
+ * Public constructor.
+ */
+    Application() : tft(TFT_eSPI()), time(0), udp(), timezone(frParis), servers()
     {
       tft.init();
       tft.setRotation(3);
     }
 
+/**
+ * Method called once at startup.
+ */
     void setup() {
       splash_screen();
 
@@ -59,24 +72,59 @@ class Application {
       }
 
       setFirstTime();
-      
-//      WiFi.disconnect(true);
-//      WiFi.mode(WIFI_OFF);
     }
 
+/**
+ * Method called in loop until the end of the world.
+ */
     void loop() {
-      static auto last = 0;
+      static unsigned long last = 0;  // time.getEpoch()
 
       const auto epoch = time.getEpoch();
       if (epoch != last) {
         if (!last) tft.fillScreen(TFT_BLACK); // First loop
         displayTime(epoch);
         last = epoch;
+        return;
       }
+
+
+
     }
 
   protected:
 
+/**
+ * Add or replace a server in the list.
+ * @param refId reference ID (IP or name).
+ * @param polling [s].
+ * @param lastPoll UTC time of the last poll.
+ */
+    void addServer(const char refId[4], const unsigned poll, const unsigned long lastPoll) {
+      for (byte i = 0; i < 10; ++i) {
+        Serial.print(i);
+        Serial.print(servers[i].refId[0]);
+        Serial.print(servers[i].refId[0]);
+        Serial.print(servers[i].refId[0]);
+        Serial.print(servers[i].refId[0]);
+        if (memcmp(servers[i].refId, "\0\0\0\0", 4) == 0) {
+          memcpy(servers[i].refId, refId, 4) ;
+          servers[i].poll = poll;
+          servers[i].lastPoll = lastPoll;
+          return;
+        } 
+        if (memcmp(refId, servers[i].refId, 4) == 0) {
+          servers[i].poll = poll;
+          servers[i].lastPoll = lastPoll;
+          return;
+        }
+      }
+    }
+
+/**
+ * Splash screen explaining the aim of the application.
+ * @todo
+ */
     void splash_screen() {  
       tft.fillScreen(TFT_BLACK);
       tft.setSwapBytes(true);
@@ -84,8 +132,6 @@ class Application {
       delay(1000);
 
    //   tft.setFreeFont(&DSEG14_Classic_Bold_Italic_25);
-
-
 
       tft.setTextColor(TFT_YELLOW);
 //      tft.setTextFont(4);
@@ -98,6 +144,10 @@ class Application {
       delay(2000);
     }
 
+/**
+ * Display current time (local clock) to the display.
+ * @param epoch The current time.
+ */
     void displayTime(const unsigned long& epoch) {
       static const char *const days[] = { "Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam" };
       static const char *const months[] = { "Janv.", "Fevr.", "Mars", "Avril", "Mai", "Juin", "Juil.", "Aout", "Sept.", "Octo.", "Nove.", "Dece." };
@@ -133,10 +183,15 @@ class Application {
         tft.drawString(str, tft.width()/2, tft.height(), 2);
     }
 
+/**
+ * Setup local time for the first time until time offset is lower than 500µs (MAX_OFFSET).
+ */
     void setFirstTime() {
+      static const auto MAX_OFFSET = 500;
+
       int64_t offset = 1000000;
       unsigned polling = 0;
-      while (abs(offset) > 500) {
+      while (abs(offset) > MAX_OFFSET) {
         delay((polling > 30 ? 30 : polling) * 1000);
         NTP ntp = NTP::makeNTP();
         sendNTP(ntp, POOL_NTP, PORT_NTP);
@@ -148,6 +203,8 @@ class Application {
 
         time.setTime(time.getEpoch() + offset / 1000000, (time.getMicros() + offset) % 1000000);
         polling = ntp.getPolling();
+
+        addServer(ntp.getId(), ntp.getPolling(), time.getEpoch());
 
         Serial.println(ntp.getHeader());
         Serial.print("Max polling [s]: ");
@@ -173,6 +230,12 @@ class Application {
       }
     }
 
+/**
+ * Send a prepared NTP packet to the designed host and port using UDP.
+ * @param ntp Reference to a NTP packet to be sent.
+ * @param host Host's name (array of char).
+ * @param port UDP port.
+ */
     void sendNTP(NTP& ntp, const char host[], const unsigned port) {
       udp.begin(1024);
       udp.beginPacket(host, port);
@@ -201,96 +264,10 @@ class Application {
       ntp.setT3(rx);
       return true;
     }
-
-
-/*
-    void allFonts() {
-      for (int i = 0; i <= 8; ++i) {
-        tft.setCursor(0, 0);
-        tft.setTextFont(i);
-        tft.fillScreen(TFT_BLACK);
-        tft.print(i);
-        tft.println(" Hello World!");
-        delay(2000);
-      }
-    }
-*/
-
-/**
- * send a NTP request and return the responce.
- **/
- /*
-    void getNTP(const char server[], uint64_t& t1, uint64_t& tp1, uint64_t& tp2, uint64_t& t2) {
-      struct ntp_packet {
-        uint8_t li_vn_mode;      // Eight bits. li, vn, and mode (Flags  MSB[LI:2 VN:3 Mode:3]LSB   LI=0, VN=3 mode=3)
-
-        uint8_t stratum;         // Eight bits. Stratum level of the local clock.
-        uint8_t poll;            // Eight bits. Maximum interval between successive messages. (2^n)
-        int8_t  precision;       // Eight bits. Precision of the local clock. -10 --> 2^(-10) ~ 0.97 msec
-
-        int32_t rootDelay;      // 32 bits. Total round trip delay time.
-        int32_t rootDispersion; // 32 bits. Max error aloud from primary clock source.
-        char    refId[4];       // 32 bits. Reference clock identifier as char[4]
-
-        uint8_t refTm_s[4];      // 32 bits. Reference time-stamp seconds.
-        uint8_t refTm_f[4];      // 32 bits. Reference time-stamp fraction of a second.
-
-        uint8_t origTm_s[4];     // 32 bits. Originate time-stamp seconds.
-        uint8_t origTm_f[4];     // 32 bits. Originate time-stamp fraction of a second.
-
-        uint8_t rxTm_s[4];       // 32 bits. Received time-stamp seconds.
-        uint8_t rxTm_f[4];       // 32 bits. Received time-stamp fraction of a second.
-
-        uint8_t txTm_s[4];      // 32 bits and the most important field the client cares about. Transmit time-stamp seconds.
-        uint8_t txTm_f[4];      // 32 bits. Transmit time-stamp fraction of a second.
-
-      };              // Total: 384 bits or 48 bytes.
-
-      ntp_packet packet = (ntp_packet){ 0b00011011, 0, 0, -10, 0, 0, "", 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 };
-
-      udp.begin(123);
-      udp.beginPacket(server, 123);
-
-      const unsigned long s = time.getEpoch();
-      const uint32_t tx_s = s + YEAR1970;
-      SET_REGISTER(packet.txTm_s, tx_s);
-      
-      const uint64_t ms = time.getMicros();
-      const uint32_t tx_ms = (ms << 32) / 1000000;
-      SET_REGISTER(packet.txTm_f, tx_ms);
-
-      udp.write((const uint8_t*)(&packet), sizeof(packet));
-      udp.endPacket();
-
-      const auto start = millis();
-      while ((udp.parsePacket() < sizeof(packet)) && ((millis() - start) < 50)) {
-        yield();
-      }
-      
-      t2 = time.getMicros();
-      t2 += (time.getEpoch() + YEAR1970) * 1000000ULL;
-
-      if (millis() - start > 50) {
-        t1 = t2 = tp1 = tp2 = 0;
-        return;
-      }
-
-      udp.read((uint8_t*)(&packet), sizeof(packet));
-
-      const auto ref = MS1900(packet.refTm_s, packet.refTm_f);
-
-      // t1 = MS1900(packet.origTm_s, packet.origTm_f);
-      t1 = (s + YEAR1970) * 1000000UL + ms;
-
-      tp1 = MS1900(packet.rxTm_s, packet.rxTm_f);
-      tp2 = MS1900(packet.txTm_s, packet.txTm_f);
-    }
-*/
-
 /**
  * Setup WiFi using Application's template WIFI_SSID & WIFI_PASS.
  * @return True if ok or else False.
- **/
+ */
     bool initWiFi() {
       tft.setCursor(0,0);
       tft.fillScreen(TFT_BLACK);
@@ -345,6 +322,7 @@ class Application {
     ESP32Time time;
     WiFiUDP udp;
     Timezone timezone;
+    NTPServer servers[10];
 };
 
 
