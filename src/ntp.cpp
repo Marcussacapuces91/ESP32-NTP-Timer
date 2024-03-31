@@ -90,7 +90,17 @@ uint64_t NTP::getT3() const {
 }
 
 int64_t NTP::getOffset() const {
+//  Serial.printf("T0: %llu - T1: %llu - T2: %llu - T3: %llu\n", getT0(), getT1(), getT2(), getT3());
   const int64_t diff1 = getT1() - getT0();
   const int64_t diff2 = getT2() - getT3();
+//  Serial.printf("T1-T0: %lld - T2-T3: %lld - Off: %lld\n", diff1, diff2, (diff1 + diff2)/2);
   return (diff1 + diff2) / 2;
 }      
+
+unsigned long NTP::getRTT() const {
+//  Serial.printf("T0: %llu - T1: %llu - T2: %llu - T3: %llu\n", getT0(), getT1(), getT2(), getT3());
+  const uint64_t diff1 = getT3() - getT0();
+  const uint64_t diff2 = getT2() - getT1();
+//  Serial.printf("T3-T0: %llu - T2-T1: %llu - RTT: %llu\n", diff1, diff2, diff1 - diff2);
+  return diff1 - diff2; // must be > 0
+}
