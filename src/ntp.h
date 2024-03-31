@@ -24,9 +24,23 @@
 
 class NTP {
   public:
+/**
+  * Forge un packet NTP V3 client vid.
+  */
     static NTP makeNTP();
+
+/**
+ * Retourne un pointeur sur le paquet NTP interne.
+ * @return adresse du paquet NTP.
+ */
     const uint8_t* packetAddr() const;
+
+/**
+ * Retourne la taille d'un paquet NTP.
+ * @return la taille en octets.
+ */
     static byte packetSize();
+
     const char* getHeader() const;
     byte getMode() const;
     byte getVersion() const;
