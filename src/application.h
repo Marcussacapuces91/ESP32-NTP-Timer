@@ -78,15 +78,41 @@ class Application {
  * Method called in loop until the end of the world.
  */
     void loop() {
+      return;
+
       static unsigned long last = 0;  // time.getEpoch()
+      static unsigned poll = 1;
 
       const auto epoch = time.getEpoch();
       if (epoch != last) {
         if (!last) tft.fillScreen(TFT_BLACK); // First loop
         displayTime(epoch);
+
+        if (!(epoch % poll)) {
+//          Serial.printf("%d + %d >= %d \n", last, poll, epoch);
+          NTP ntp = NTP::makeNTP();
+          sendNTP(ntp, POOL_NTP, PORT_NTP);
+        }
+
         last = epoch;
         return;
       }
+
+      NTP ntp = NTP::makeNTP();
+      const bool received = waitForNTP(ntp, PORT_NTP, 0);
+      if (received && ntp.getT1() && ntp.getT2() && ntp.getVersion() == 3 && ntp.getMode() == 4) {
+        const auto offset = ntp.getOffset();
+        addServer(ntp.getId(), ntp.getPolling(), epoch);
+        poll = (ntp.getPolling() > 30 ? 30 : ntp.getPolling() );
+        const auto rtt = ntp.getRTT() / 1000000.0;
+        const auto headers = ntp.getHeader();
+
+        Serial.printf("\"%s\", %f, %f, %d, \"%s\"\n", ntp.getIP(), offset / 1000.0, rtt, poll, headers);
+      }
+
+
+
+
 
 
 
@@ -102,20 +128,20 @@ class Application {
  */
     void addServer(const char refId[4], const unsigned poll, const unsigned long lastPoll) {
       for (byte i = 0; i < 10; ++i) {
-        Serial.print(i);
-        Serial.print(servers[i].refId[0]);
-        Serial.print(servers[i].refId[0]);
-        Serial.print(servers[i].refId[0]);
-        Serial.print(servers[i].refId[0]);
+//        char s[50];
+//        snprintf(s, 50, "addServer %d.%d.%d.%d", servers[i].refId[0], servers[i].refId[1], servers[i].refId[2], servers[i].refId[3]);
+//        Serial.print(s);
         if (memcmp(servers[i].refId, "\0\0\0\0", 4) == 0) {
           memcpy(servers[i].refId, refId, 4) ;
           servers[i].poll = poll;
           servers[i].lastPoll = lastPoll;
+//          Serial.println(" added");
           return;
         } 
         if (memcmp(refId, servers[i].refId, 4) == 0) {
           servers[i].poll = poll;
           servers[i].lastPoll = lastPoll;
+//          Serial.println(" updated");
           return;
         }
       }
@@ -184,50 +210,40 @@ class Application {
     }
 
 /**
- * Setup local time for the first time until time offset is lower than 500µs (MAX_OFFSET).
+ * Setup local time for the first time until time offset is lower than 1ms (MAX_OFFSET).
  */
     void setFirstTime() {
-      static const auto MAX_OFFSET = 500;
-
-      int64_t offset = 1000000;
-      unsigned polling = 0;
-      while (abs(offset) > MAX_OFFSET) {
-        delay((polling > 30 ? 30 : polling) * 1000);
-        NTP ntp = NTP::makeNTP();
+      NTP ntp = NTP::makeNTP();
+      while (true) {
+//        Serial.println(time.getDateTime());
         sendNTP(ntp, POOL_NTP, PORT_NTP);
-
         const bool received = waitForNTP(ntp, PORT_NTP, 100);
-        if (!received || !ntp.getT1() || !ntp.getT2() || ntp.getVersion() != 3 || ntp.getMode() != 4) continue;
-
-        offset = ntp.getOffset();
-
-        time.setTime(time.getEpoch() + offset / 1000000, (time.getMicros() + offset) % 1000000);
-        polling = ntp.getPolling();
-
-        addServer(ntp.getId(), ntp.getPolling(), time.getEpoch());
+        if (received) {
+          const auto t = ntp.getT2();
+          const auto d = (t - YEAR1970 * 1000000) / 1000000;
+          const auto m = (t - YEAR1970 * 1000000) - d * 1000000;
+          time.setTime(d, m);
+          break;
+        }
 
         Serial.println(ntp.getHeader());
-        Serial.print("Max polling [s]: ");
-        Serial.println(polling);
-        char prec[50];
-        snprintf(prec, 50, "Src prec. [s]: %e", ntp.getPrecision());
-        Serial.println(prec);
-        Serial.print("IP: ");
-        Serial.println(ntp.getIP());
-
-        Serial.print("T0: ");
-        Serial.println(ntp.getT0());
-        Serial.print("T1: ");
-        Serial.println(ntp.getT1());
-        Serial.print("T2: ");
-        Serial.println(ntp.getT2());
-        Serial.print("T3: ");
-        Serial.println(ntp.getT3());
-        Serial.print("Diff: ");
-        Serial.println(ntp.getOffset());
-
+        Serial.printf("IP: %s\n", ntp.getIP());
+        Serial.printf("Src prec. [s]: %e\n", ntp.getPrecision());
+        Serial.printf("Diff [µs]: %lld\n", ntp.getOffset());
+        Serial.printf("RTT [µs]: %lu\n", ntp.getRTT());
         Serial.println(time.getDateTime());
+
+        const auto polling = ntp.getPolling();
+        delay((polling > 30 ? 30 : polling) * 1000);
       }
+/*
+      Serial.println(ntp.getHeader());
+      Serial.printf("IP: %s\n", ntp.getIP());
+      Serial.printf("Src prec. [s]: %e\n", ntp.getPrecision());
+      Serial.printf("Diff [µs]: %lld\n", ntp.getOffset());
+      Serial.printf("RTT [µs]: %lu\n", ntp.getRTT());
+      Serial.println(time.getDateTime());
+*/
     }
 
 /**
@@ -262,8 +278,21 @@ class Application {
       udp.read(buffer, size);
       ntp.setPacket(buffer);
       ntp.setT3(rx);
+
+      if (ntp.getT3() < ntp.getT0()) {
+        Serial.println("WARNING ! T3 < T0 ");
+        return false;
+      }
+      if (ntp.getT2() < ntp.getT1()) {
+        Serial.println("WARNING ! T2 < T1 ");
+        return false;
+      }
+
+      if (!ntp.getT1() || !ntp.getT2() || ntp.getVersion() != 3 || ntp.getMode() != 4) return false;
+
       return true;
     }
+    
 /**
  * Setup WiFi using Application's template WIFI_SSID & WIFI_PASS.
  * @return True if ok or else False.
