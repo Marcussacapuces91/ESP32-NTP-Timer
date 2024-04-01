@@ -21,14 +21,40 @@
 #include <arduino.h>
 
 // #define byte unsigned char
-#define YEAR1970 2208988800
 
+/**
+ * Définit l'écart entre le 1er janvier 1900 (zéro NTP) et le 1er janvier 1970 (zéro Unix).
+ */
+ #define YEAR1970 2208988800
+
+/**
+ * Listes des modes NTP 
+ *  0 reserved
+ *  1 symmetric active
+ *  2 symmetric passive
+ *  3 client
+ *  4 server
+ *  5 broadcast
+ *  6 NTP control message
+ *  7 reserved for private use
+ */
+ enum NtpMode { NTPMODE_RESERVED = 0, NTPMODE_SYMMETRIC_ACTIVE = 1, NTPMODE_SYMMETRIC_PASSIVE = 2, NTPMODE_CLIENT = 3, NTPMODE_SERVER = 4, NTPMODE_BROADCAST = 5, NTPMODE_CONTROL_MESSAGE = 6, NTPMODE_PRIVATE_USE = 7 }; 
+
+/**
+ * La classe NTP encapsule les fonctionnalités liées à la communication avec le serveur NTP.
+ * @see https://fr.wikipedia.org/wiki/Network_Time_Protocol
+ * @see https://www.ntp.org/reflib/reports/ntp4/ntp4.pdf
+ */
 class NTP {
   public:
 /**
-  * Forge un packet NTP V3 client vid.
+  * Forge un packet NTP V3 client vide.
+  * @param mode Valeur du mode.
+  * @param version Valeur de la version du protocole, par défaut 4.
+  * @return Une instance NTP.
   */
-    static NTP makeNTP();
+    static NTP makeNTP(const NtpMode mode, const byte version = 4);
+
 
 /**
  * Retourne un pointeur sur le paquet NTP interne.
@@ -47,7 +73,17 @@ class NTP {
  * @return un pointeur sur la chaîne.
  */
     const char* getHeader() const;
-    byte getMode() const;
+
+/**
+ * Retourne le mode utilisé par le protocole NTP.
+ * @return Un entier indiquant le protocole selon les valeurs de type NtpMode.
+ */
+    NtpMode getMode() const;
+
+/**
+ * Retourne la version du protocole NTP utilisé.
+ * @return Un entier indiquant la version définie.
+ */
     byte getVersion() const;
 
 /**
@@ -55,7 +91,17 @@ class NTP {
  * @return Un temps en secondes.
  */
     unsigned getPolling() const;
+
+/**
+ * Retourne la précision indiquée par le serveur.
+ * @return Une valeur décimale en secondes (fractions).
+ */
     double getPrecision() const;
+
+/**
+ * Retourne l'identifiant du serveur.
+ * @return Une chaine de caractères indiquant l'identifiant.
+ */    
     const char* getId() const;
     const char* getIP() const;
     uint64_t getT0() const;
@@ -70,9 +116,12 @@ class NTP {
     int64_t getOffset() const;
 
 /**
- * Round-trip delay time.
+ * Round-trip delay time (RTT).
+ * @return Le temps d'aller/retour du packet NTP en microsecondes.
  */
     unsigned long getRTT() const;
+
+
     void setPacket(const uint8_t buffer[]);
     void setT0(const uint64_t& tx);
     void setT3(const uint64_t& rx);

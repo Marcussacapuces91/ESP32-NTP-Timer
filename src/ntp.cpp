@@ -20,11 +20,16 @@
 #include <cmath>
 
 #define MS1900(A, B) ( ((((A[0] * 256UL + A[1]) * 256UL + A[2]) * 256UL + A[3]) * 1000000ULL) + (((((B[0] * 256UL + B[1]) * 256UL + B[2]) * 256UL + B[3]) * 1000000ULL) >> 32) )
+#define MAXSTRAT 16
 
-NTP::NTP() : packet( (ntp_packet){ 0b00011011, 0, 0, -10, 0, 0, "", 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 } ) {}
+NTP::NTP() : packet( (ntp_packet){ 0, 0, 0, 0, 0, 0, "", 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0 } ) {}
 
-NTP NTP::makeNTP() {
+NTP NTP::makeNTP(const NtpMode mode, const byte version) {
   NTP result;
+  // result.packet.li_vn_mode = (version % 8) << 3 + (mode % 8);
+  result.packet.li_vn_mode = 0b00011011;
+  result.packet.stratum = MAXSTRAT;
+  result.packet.precision = -10;
   return result;
 }
 
@@ -46,8 +51,8 @@ const char* NTP::getHeader() const {
   return buffer;
 }
 
-byte NTP::getMode() const {
-  return (packet.li_vn_mode) % 8;
+NtpMode NTP::getMode() const {
+  return NtpMode((packet.li_vn_mode) % 8);
 }
 
 byte NTP::getVersion() const {
