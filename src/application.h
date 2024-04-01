@@ -80,7 +80,6 @@ class Application {
     void loop() {
       static unsigned long last = 0;  // time.getEpoch()
       static unsigned poll = 1;
-      static long long int correction = 0;
 
       const auto epoch = time.getEpoch();
       if (epoch != last) {
@@ -89,7 +88,7 @@ class Application {
 
         if (!(epoch % poll)) {
 //          Serial.printf("%d + %d >= %d \n", last, poll, epoch);
-          NTP ntp = NTP::makeNTP();
+          NTP ntp = NTP::makeNTP(NTPMODE_CLIENT);
           sendNTP(ntp, POOL_NTP, PORT_NTP);
         }
 
@@ -97,23 +96,30 @@ class Application {
         return;
       }
 
-      NTP ntp = NTP::makeNTP();
+      NTP ntp = NTP::makeNTP(NTPMODE_CLIENT, 3);
       if (waitForNTP(ntp, PORT_NTP)) {
         const long long int offset = ntp.getOffset();
         addServer(ntp.getId(), ntp.getPolling(), epoch);
         poll = (ntp.getPolling() > 30 ? 30 : ntp.getPolling() );
         if (!poll) poll = 1;
         const auto rtt = ntp.getRTT();
+        const auto ip = ntp.getIP();
         const auto headers = ntp.getHeader();
+        const double precision = ntp.getPrecision();
 
-        correction = (rtt < 30000) ? (offset * poll) / 128 : 0;
+        static const auto P = 0.2;
+        const long correction = (rtt < 30000) ? (offset * poll) * P : 0;
 
-        const auto d = correction / 1000000;
-        const auto m = correction - d * 1000000;
-        time.setTime(time.getEpoch() + d, time.getMicros() + m);
+        if (!correction) {
+          const auto d = correction / 1000000;
+          const auto m = correction - d * 1000000;
+          time.setTime(time.getEpoch() + d, time.getMicros() + m);
+        }
 
-        Serial.printf("\"%s\", %lld, %lu, %d, ", ntp.getIP(), offset, rtt, poll);
-        Serial.println(correction);
+        Serial.printf("IP:\"%s\", Hdr:\"%s\", prec:%Lg, ", ip, headers, precision);
+        Serial.printf("Err:%lld, Rtt:%lu, Poll:%d, ",  offset, rtt, poll);
+        Serial.printf("Corr:%ld ", correction);
+        Serial.println();
       }
     }
 
@@ -212,7 +218,7 @@ class Application {
  * Setup local time for the first time until time offset is lower than 1ms (MAX_OFFSET).
  */
     void setFirstTime() {
-      NTP ntp = NTP::makeNTP();
+      NTP ntp = NTP::makeNTP(NTPMODE_CLIENT, 3);
       while (true) {
 //        Serial.println(time.getDateTime());
         sendNTP(ntp, POOL_NTP, PORT_NTP);
@@ -279,7 +285,7 @@ class Application {
       ntp.setT3(rx);
 
       if (ntp.getT3() < ntp.getT0()) {
-        Serial.println("WARNING ! T3 < T0 ");
+//        Serial.println("WARNING ! T3 < T0 ");
         return false;
       }
       if (ntp.getT2() < ntp.getT1()) {
@@ -287,7 +293,7 @@ class Application {
         return false;
       }
 
-      if (!ntp.getT1() || !ntp.getT2() || ntp.getVersion() != 3 || ntp.getMode() != 4) return false;
+      if (!ntp.getT1() || !ntp.getT2() || ntp.getVersion() != 3 || ntp.getMode() != NTPMODE_SERVER) return false;
 
       return true;
     }
