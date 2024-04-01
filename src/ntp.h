@@ -49,6 +49,11 @@ class NTP {
     const char* getHeader() const;
     byte getMode() const;
     byte getVersion() const;
+
+/**
+ * Retourne le temps entre 2 demandes acceptable par le serveur.
+ * @return Un temps en secondes.
+ */
     unsigned getPolling() const;
     double getPrecision() const;
     const char* getId() const;
