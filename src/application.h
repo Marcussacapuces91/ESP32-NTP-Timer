@@ -78,10 +78,9 @@ class Application {
  * Method called in loop until the end of the world.
  */
     void loop() {
-      return;
-
       static unsigned long last = 0;  // time.getEpoch()
       static unsigned poll = 1;
+      static int correction = 0;
 
       const auto epoch = time.getEpoch();
       if (epoch != last) {
@@ -99,23 +98,23 @@ class Application {
       }
 
       NTP ntp = NTP::makeNTP();
-      const bool received = waitForNTP(ntp, PORT_NTP, 0);
-      if (received && ntp.getT1() && ntp.getT2() && ntp.getVersion() == 3 && ntp.getMode() == 4) {
-        const auto offset = ntp.getOffset();
+      if (waitForNTP(ntp, PORT_NTP)) {
+        const long int offset = ntp.getOffset();
         addServer(ntp.getId(), ntp.getPolling(), epoch);
         poll = (ntp.getPolling() > 30 ? 30 : ntp.getPolling() );
-        const auto rtt = ntp.getRTT() / 1000000.0;
+        if (!poll) poll = 1;
+        const auto rtt = ntp.getRTT();
         const auto headers = ntp.getHeader();
 
-        Serial.printf("\"%s\", %f, %f, %d, \"%s\"\n", ntp.getIP(), offset / 1000.0, rtt, poll, headers);
+        correction = (rtt < 30000) ? (offset * poll) / 128 : 0;
+
+        const auto d = correction / 1000000;
+        const auto m = correction - d * 1000000;
+        time.setTime(time.getEpoch() + d, time.getMicros() + m);
+
+        Serial.printf("\"%s\", %ld, %lu, %d, ", ntp.getIP(), offset, rtt, poll);
+        Serial.println(correction);
       }
-
-
-
-
-
-
-
     }
 
   protected:
@@ -217,8 +216,7 @@ class Application {
       while (true) {
 //        Serial.println(time.getDateTime());
         sendNTP(ntp, POOL_NTP, PORT_NTP);
-        const bool received = waitForNTP(ntp, PORT_NTP, 100);
-        if (received) {
+        if (waitForNTP(ntp, PORT_NTP, 100)) {
           const auto t = ntp.getT2();
           const auto d = (t - YEAR1970 * 1000000) / 1000000;
           const auto m = (t - YEAR1970 * 1000000) - d * 1000000;
@@ -262,20 +260,21 @@ class Application {
       udp.endPacket();
     }
 
-    bool waitForNTP(NTP& ntp, const unsigned port, const unsigned timeout = 100) {
+    bool waitForNTP(NTP& ntp, const unsigned port, const unsigned timeout = 0) {
       const auto start = millis();
       while ((udp.parsePacket() < ntp.packetSize()) && (millis() < (start + timeout))) {
         yield();
       }
-      
       uint64_t rx = time.getMicros();
-      rx += (time.getEpoch() + YEAR1970) * 1000000ULL;
+      rx += (time.getEpoch() + YEAR1970) * 1000000;
 
-      if (millis() > (start + timeout)) return false;
+      if (millis() > (start + timeout)) return false; // timedout without packet.
 
       const auto size = NTP::packetSize();
       uint8_t buffer[size];
-      udp.read(buffer, size);
+      const auto nb = udp.read(buffer, size);
+      if (nb == -1) return false; // error reading!
+
       ntp.setPacket(buffer);
       ntp.setT3(rx);
 
@@ -284,7 +283,7 @@ class Application {
         return false;
       }
       if (ntp.getT2() < ntp.getT1()) {
-        Serial.println("WARNING ! T2 < T1 ");
+//        Serial.println("WARNING ! T2 < T1 ");
         return false;
       }
 
@@ -292,7 +291,7 @@ class Application {
 
       return true;
     }
-    
+
 /**
  * Setup WiFi using Application's template WIFI_SSID & WIFI_PASS.
  * @return True if ok or else False.
