@@ -80,7 +80,7 @@ class Application {
     void loop() {
       static unsigned long last = 0;  // time.getEpoch()
       static unsigned poll = 1;
-      static int correction = 0;
+      static long long int correction = 0;
 
       const auto epoch = time.getEpoch();
       if (epoch != last) {
@@ -99,7 +99,7 @@ class Application {
 
       NTP ntp = NTP::makeNTP();
       if (waitForNTP(ntp, PORT_NTP)) {
-        const long int offset = ntp.getOffset();
+        const long long int offset = ntp.getOffset();
         addServer(ntp.getId(), ntp.getPolling(), epoch);
         poll = (ntp.getPolling() > 30 ? 30 : ntp.getPolling() );
         if (!poll) poll = 1;
@@ -112,7 +112,7 @@ class Application {
         const auto m = correction - d * 1000000;
         time.setTime(time.getEpoch() + d, time.getMicros() + m);
 
-        Serial.printf("\"%s\", %ld, %lu, %d, ", ntp.getIP(), offset, rtt, poll);
+        Serial.printf("\"%s\", %lld, %lu, %d, ", ntp.getIP(), offset, rtt, poll);
         Serial.println(correction);
       }
     }
