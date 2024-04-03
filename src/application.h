@@ -25,6 +25,8 @@
 #include "ntp.h"
 #include "timezone.h"
 
+#include <vector>
+
 #include "ftntp_client.h"
 // #include "DSEG14_Classic_Bold_Italic_25.h"
 
@@ -80,6 +82,7 @@ class Application {
     void loop() {
       static unsigned long last = 0;  // time.getEpoch()
       static unsigned poll = 1;
+      static std::vector<int64_t> offsets(10);
 
       const auto epoch = time.getEpoch();
       if (epoch != last) {
@@ -98,7 +101,9 @@ class Application {
 
       NTP ntp = NTP::makeNTP(NTPMODE_CLIENT, 3);
       if (waitForNTP(ntp, PORT_NTP)) {
-        const long long int offset = ntp.getOffset();
+        const auto offset = ntp.getOffset();
+        offsets.insert(offsets.cbegin(), offset);
+                
         addServer(ntp.getId(), ntp.getPolling(), epoch);
         poll = (ntp.getPolling() > 30 ? 30 : ntp.getPolling() );
         if (!poll) poll = 1;
@@ -107,10 +112,10 @@ class Application {
         const auto headers = ntp.getHeader();
         const double precision = ntp.getPrecision();
 
-        static const auto P = 0.2;
-        const long correction = (rtt < 30000) ? (offset * poll) * P : 0;
+        static const auto P = 0.05;
+        const long correction = ((rtt < 30000) || (precision < 1e-5)) ? (offset * poll) * P : 0;
 
-        if (!correction) {
+        if (correction != 0) {
           const auto d = correction / 1000000;
           const auto m = correction - d * 1000000;
           time.setTime(time.getEpoch() + d, time.getMicros() + m);
