@@ -103,20 +103,45 @@ class NTP {
  * @return Une chaine de caractères indiquant l'identifiant.
  */    
     const char* getId() const;
+
+/**
+ * Retourne l'IP tirée du champ ID.
+ * @return Une chaîne de caractères représentant l'IP.
+ */    
     const char* getIP() const;
+
+/**
+ * Retourne le paramètre ORG.
+ * @return Le temps en microsecondes depuis le 1er janvier 1900.
+ */
     uint64_t getT0() const;
+
+/**
+ * Retourne le paramètre REC/Rx.
+ * @return Le temps en microsecondes depuis le 1er janvier 1900.
+ */
     uint64_t getT1() const;
+
+/**
+ * Retourne le paramètre XMT/Tx.
+ * @return Le temps en microsecondes depuis le 1er janvier 1900.
+ */
     uint64_t getT2() const;
+
+/**
+ * Retourne l'heure du paquet à son arrivée.
+ * @return Le temps en microsecondes depuis le 1er janvier 1900.
+ */
     uint64_t getT3() const;
 
 /**
- * Retourne l'offset en microsecondes.
+ * Retourne l'offset (erreur calculée).
  * @return Ecart signé en microsecondes.
  */
     int64_t getOffset() const;
 
 /**
- * Round-trip delay time (RTT).
+ * Round-trip delay time (RTT calculé).
  * @return Le temps d'aller/retour du packet NTP en microsecondes.
  */
     unsigned long getRTT() const;
