@@ -20,10 +20,11 @@ jobs:
       - name: List files in the repository
         run: |
           ls ${{ github.workspace }}
-      - run: echo "🍏 This job's status is ${{ job.status }}."          
+#      - run: echo "🍏 This job's status is ${{ job.status }}."          
 
       - name: Compile sketches
       - uses: arduino/compile-sketches@v1
         with:
           cli-version: latest
+          sketch-paths: "./src"
 
