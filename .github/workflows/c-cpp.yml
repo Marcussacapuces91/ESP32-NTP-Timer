@@ -18,6 +18,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Make secrets.h
+        run: echo "#define WIFI_SSID \"hello\"\n#define WIFI_PASS \"world\"" >> ./src/secrets.h
+
       - run: echo "🖥️ The workflow is now ready to test your code on the runner."
       - name: List files in the repository
         run: |
