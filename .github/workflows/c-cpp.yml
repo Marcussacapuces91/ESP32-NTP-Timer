@@ -23,4 +23,4 @@ jobs:
       - run: echo "🍏 This job's status is ${{ job.status }}."          
 
       - name: Install Arduino-Cli V2
-        uses: arduino/setup-setup-arduino-cli@latest
+        uses: arduino/setup-setup-arduino-cli@v1
