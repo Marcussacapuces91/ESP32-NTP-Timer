@@ -12,6 +12,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@latest
       with:
         submodules: recursive
+    - name: Install Arduino-Cli V2
+      uses: arduino/setup-setup-arduino-cli@latest
