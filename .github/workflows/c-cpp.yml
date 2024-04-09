@@ -22,5 +22,6 @@ jobs:
           ls ${{ github.workspace }}
       - run: echo "🍏 This job's status is ${{ job.status }}."          
 
-      - name: Install Arduino-Cli V2
-        uses: arduino/setup-setup-arduino-cli@v1
+      - name: Compile sketches
+        uses: arduino/compile-sketches@v1
+
