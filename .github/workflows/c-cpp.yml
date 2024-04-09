@@ -33,5 +33,6 @@ jobs:
           sketch-paths: "./src"
           libraries: |
             - name: TFT_eSPI
+            - name: WiFi
 
       - run: echo "🍏 This job's status is ${{ job.status }}."          
