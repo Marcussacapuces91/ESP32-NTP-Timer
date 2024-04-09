@@ -31,6 +31,8 @@ jobs:
         with:
           cli-version: latest
           sketch-paths: "./src"
+          arduino-platform: esp32:esp32
+          fqbn: esp32:esp32:esp32
           libraries: |
             - name: TFT_eSPI
             - name: WiFi
