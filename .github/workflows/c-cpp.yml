@@ -31,5 +31,7 @@ jobs:
         with:
           cli-version: latest
           sketch-paths: "./src"
+          libraries: |
+            - name: TFT_eSPI
 
       - run: echo "🍏 This job's status is ${{ job.status }}."          
